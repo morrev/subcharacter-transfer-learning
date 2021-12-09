@@ -29,3 +29,15 @@ JWEurl="https://github.com/HKUST-KnowComp/JWE.git"
 if ! git clone "${JWEurl}" "${JWEfolder}" 2>/dev/null && [ -d "${JWEfolder}" ] ; then
     echo "Clone ignored because the folder ${JWEfolder} exists"
 fi
+
+# Download word similarity intrinsic evaluation dataset
+mkdir -p data/JWSAN
+cd data/JWSAN
+
+if [ -e "jwsan-1400.csv" ]; then
+    echo 'jwsan-1400 data file already exists' >&2
+else
+    curl -OL http://www.utm.inf.uec.ac.jp/JWSAN/en/jwsan-1400.csv
+fi
+
+cd ../../
