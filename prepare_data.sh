@@ -41,3 +41,15 @@ else
 fi
 
 cd ../../
+
+# Download wikipedia data if it does not already exist locally
+mkdir -p data/Wikipedia_title_dataset
+cd data/Wikipedia_title_dataset
+
+if [ -e "ja_raw.txt" ]; then
+    echo 'ja_raw.txt (Wikipedia) data file already exists' >&2
+else
+    curl -OL https://raw.githubusercontent.com/frederick0329/Wikipedia-Title-Dataset/master/acl2017_data/ja_raw.txt
+fi
+
+cd ../../
