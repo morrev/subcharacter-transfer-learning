@@ -1,5 +1,10 @@
 # subcharacter-transfer-learning
 
 Data preparation:
-1. ./prepare_data.sh 
-2. 
+* Run `./prepare_data.sh` 
+  * this git clones:
+    * GDCE-SSA: repo for livedoor train/test split and processing
+    * JWE: radical and subcomponent mappings
+  * this curls:
+    * livedoor: 9 label title classification dataset
+    * JWSAN: word similarity pair scores
