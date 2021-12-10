@@ -4,6 +4,8 @@ import argparse
 import torch
 import csv
 from wordsim_utils import *
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, AdamW
+from torch.utils.data import DataLoader, Dataset
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model",
@@ -40,6 +42,22 @@ with open(wstxtfile, "r") as o:
 w1s = w1s[1:]
 w2s = w2s[1:]
 scores = scores[1:]
+tokenizer = AutoTokenizer.from_pretrained("cl-tohoku/bert-base-japanese-char-v2")
+encodings_w1 = tokenizer(w1s, truncation=True, padding=True, max_length = 512)
+encodings_w2 = tokenizer(w2s, truncation=True, padding=True, max_length = 512)
+
+# load model
+
+# get embeddings
+all_logits_w1 = []
+all_logits_w2 = []
+with torch.no_grad():
+    for batch in loader_1:
+        interm = last_hidden_output(batch, model)
+        all_logits_w1.append(interm.cpu())
+    for batch in loader_2:
+        interm = last_hidden_output(batch, model)
+        all_logits_w2.append(interm.cpu())
 
 # run linear regression
 mean = 0
