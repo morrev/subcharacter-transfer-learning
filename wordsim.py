@@ -73,7 +73,7 @@ class WordSimDataset(Dataset):
 # load model
 h1, h2 = None, None
 if args.model == "glyph":
-    if model.pooled == "False":
+    if args.pooled == "False":
         seq_lengths_w1, glyph_embs_w1 = text2glyph(w1s)
         seq_lengths_w2, glyph_embs_w2 = text2glyph(w2s)
         dataset_w1 = WordSimDataset(encodings_w1, glyph_embs_w1, seq_lengths_w1)
@@ -107,7 +107,7 @@ elif args.model == "radical" or args.model == "subcomponent":
     SEQ_LEN_W2 = len(encodings_w2['input_ids'][0])
     subcomponent_embs_w1 = subcomponent2emb(subcomponent_ids_w1, padding = True, seq_length = SEQ_LEN_W1)
     subcomponent_embs_w2 = subcomponent2emb(subcomponent_ids_w2, padding = True, seq_length = SEQ_LEN_W2)
-    if model.pooled == "False":
+    if args.pooled == "False":
         GLYPH_EMBEDDING_SIZE = 1024
         dataset_w1 = WordSimDataset(encodings_w1, subcomponent_embs_w1, seq_lengths_w1)
         dataset_w2 = WordSimDataset(encodings_w2,subcomponent_embs_w2, seq_lengths_w2)
