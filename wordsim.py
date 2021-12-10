@@ -91,8 +91,8 @@ if args.model == "glyph":
         h1 = model.glyph_embeddings.register_forward_hook(getActivation('glyph_embeddings'))
         h2 = model.bert.pooler.register_forward_hook(getActivation('pooler'))
 elif args.model == "radical" or args.model == "subcomponent":
-    char2comp_fpath = 'JWE_embeddings/mapping/char2' + 'radical.txt' if args.model == "radical" else 'comp.txt'
-    vec_dir = f'JWE_embeddings/actual-{args.model}/comp_vec'
+    char2comp_fpath = "data/JWE/subcharacter/char2" + "comp.txt" if args.model == "subcomponent" else "radical.txt"
+    vec_dir = f'data/JWE-pretrained/{args.model}_comp_vec'
     comp_size, SUBCOMPONENT_EMBEDDING_SIZE, comp2id, SUBCOMPONENT_EMBEDDINGS = read_vectors(vec_dir)
     UNK_IDX = int(comp_size) # Set UNK to be vocab size + 1
     char2id, subcomponent_list = parse_char2comp(char2comp_fpath)
@@ -105,8 +105,8 @@ elif args.model == "radical" or args.model == "subcomponent":
     seq_lengths_w2 = [len(ids) for ids in subcomponent_ids_w2]
     SEQ_LEN_W1 = len(encodings_w1['input_ids'][0])
     SEQ_LEN_W2 = len(encodings_w2['input_ids'][0])
-    subcomponent_embs_w1 = subcomponent2emb(subcomponent_ids_w1, padding=True, seq_length = SEQ_LEN_W1)
-    subcomponent_embs_w2 = subcomponent2emb(subcomponent_ids_w2, padding=True, seq_length = SEQ_LEN_W2)
+    subcomponent_embs_w1 = subcomponent2emb(subcomponent_ids_w1, padding = True, seq_length = SEQ_LEN_W1)
+    subcomponent_embs_w2 = subcomponent2emb(subcomponent_ids_w2, padding = True, seq_length = SEQ_LEN_W2)
     if model.pooled == "False":
         GLYPH_EMBEDDING_SIZE = 1024
         dataset_w1 = WordSimDataset(encodings_w1, subcomponent_embs_w1, seq_lengths_w1)
