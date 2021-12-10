@@ -86,7 +86,7 @@ if args.model == "glyph":
         dataset_w1 = WordSimDataset(encodings_w1, glyph_embeddings_w1)
         dataset_w2 = WordSimDataset(encodings_w2, glyph_embeddings_w2)
         GLYPH_EMBEDDING_SIZE = 1728
-        model = CustomBert.from_pretrained("cl-tohoku/bert-base-japanese-char-v2", num_labels = 9).to(device)
+        model = CustomPooledModel.from_pretrained("cl-tohoku/bert-base-japanese-char-v2", num_labels = 9).to(device)
         model.load_state_dict(torch.load(f"models/bert-base-japanese-{args.dataset}-JWE-glyph/pytorch_model.bin"))
         h1 = model.glyph_embeddings.register_forward_hook(getActivation('glyph_embeddings'))
         h2 = model.bert.pooler.register_forward_hook(getActivation('pooler'))
@@ -116,7 +116,7 @@ elif args.model == "radical" or args.model == "subcomponent":
     else:
         dataset_w1 = WordSimDataset(encodings_w1, subcomponent_ids_w1)
         dataset_w2 = WordSimDataset(encodings_w2, subcomponent_ids_w2)
-        model = CustomBert.from_pretrained("cl-tohoku/bert-base-japanese-char-v2", num_labels = 9).to(device)
+        model = CustomPooledModel.from_pretrained("cl-tohoku/bert-base-japanese-char-v2", num_labels = 9).to(device)
         if model.frozen == "True":
             config = BertConfig.from_json_file(f"models/bert-base-japanese-{args.dataset}-JWE-{args.model}-frozen/config.json")
             model.load_state_dict(torch.load(f"models/bert-base-japanese-{args.dataset}-JWE-{args.model}-frozen/pytorch_model.bin"))
