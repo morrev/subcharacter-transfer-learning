@@ -6,7 +6,7 @@ from transformers.modeling_outputs import SequenceClassifierOutput
 # Related references:
 # https://stackoverflow.com/questions/64156202/add-dense-layer-on-top-of-huggingface-bert-model
 # https://github.com/huggingface/transformers/blob/v4.5.0/src/transformers/models/bert/modeling_bert.py#L1515
-class CustomBert(nn.Module):
+class CustomPooledModel(nn.Module):
     def __init__(self, bert, embeddings, num_labels, component_pad_idx):
         super().__init__()
         self.num_labels = num_labels
@@ -56,6 +56,58 @@ class CustomBert(nn.Module):
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
+        
+class CustomUnpooledModel(torch.nn.Module):
+    
+    def __init__(self, lstm_input_size: int, hidden_size: int, output_size: int, padding_idx: int, bertconfig, dropout=0.5):
+        super().__init__()
+        self.lstm_input_size = lstm_input_size
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.padding_idx = padding_idx
+        self.bert = BertModel.from_pretrained(bertconfig)
+        self.rnn = nn.LSTM(self.lstm_input_size, self.hidden_size, 1, bidirectional=True)
+        self.fc = Linear(4*self.hidden_size, self.output_size)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(
+        self,
+        input_ids=None,
+        attention_mask=None,
+        token_type_ids=None,
+        position_ids=None,
+        head_mask=None,
+        inputs_embeds=None,
+        labels=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        return_dict=None,
+        glyph_embeddings=None,
+        lens=None
+    ):
+
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            head_mask=head_mask,
+            inputs_embeds=inputs_embeds,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict
+        )
+
+        unpooled_outputs = outputs['last_hidden_state'][:,1:,:]
+        combined_output = torch.concat([unpooled_outputs, glyph_embeddings], axis=-1)
+
+        #LSTM architecture
+        X = pack_padded_sequence(combined_output, lens, batch_first=True, enforce_sorted=False)
+        output, (hn, cn) = self.rnn(X)
+        X = torch.cat([*hn, *cn], dim=-1).unsqueeze(dim=0)
+        X = self.dropout(X)
+        X = self.fc(X).squeeze()
+        return X
 
 def train_loop(dataloader, model, optimizer, device):
     model.train()
