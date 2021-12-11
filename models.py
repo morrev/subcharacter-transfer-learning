@@ -6,7 +6,7 @@ from transformers.modeling_outputs import SequenceClassifierOutput
 # Related references:
 # https://stackoverflow.com/questions/64156202/add-dense-layer-on-top-of-huggingface-bert-model
 # https://github.com/huggingface/transformers/blob/v4.5.0/src/transformers/models/bert/modeling_bert.py#L1515
-class CustomPooledModel(nn.Module):
+class CustomPooledModel(nn.Module): #CustomPooledModel(nn.Module):
     def __init__(self, bert, embeddings, num_labels, component_pad_idx):
         super().__init__()
         self.num_labels = num_labels
