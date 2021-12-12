@@ -128,15 +128,17 @@ def decompose(X_list, subcomponent_list, comp2id, char2id, unk_idx, pad_idx, pad
 # Define subcharacter info dataset class
 # based on: https://huggingface.co/transformers/custom_datasets.html
 class ComponentDataset(Dataset):
-    def __init__(self, encodings, labels, subcomponent_ids):
+    def __init__(self, encodings, labels, subcomponent_ids, seq_lengths):
         self.encodings = encodings
         self.labels = labels
         self.subcomponent_ids = subcomponent_ids
+        self.seq_lengths = seq_lengths
 
     def __getitem__(self, idx):
         item = {key: torch.tensor(val[idx]) for key, val in self.encodings.items()}
         item['labels'] = torch.tensor(self.labels[idx])
         item['subcomponent_ids'] = torch.tensor(self.subcomponent_ids[idx])
+        item['seq_lengths'] = torch.tensor(self.seq_lengths[idx])
         return item
 
     def __len__(self):

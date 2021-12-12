@@ -1,6 +1,8 @@
 import torch
 from torch import nn
-from torch.nn import CrossEntropyLoss, MSELoss
+from torch.nn import CrossEntropyLoss, MSELoss, Embedding, LSTM, Linear, init
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, pad_sequence
+from transformers import BertModel
 from transformers.modeling_outputs import SequenceClassifierOutput
 
 # Related references:
@@ -82,8 +84,8 @@ class CustomUnpooledModel(torch.nn.Module):
         output_attentions=None,
         output_hidden_states=None,
         return_dict=None,
-        glyph_embeddings=None,
-        lens=None
+        lens=None, 
+        comp_embeddings=None
     ):
 
         outputs = self.bert(
@@ -99,7 +101,8 @@ class CustomUnpooledModel(torch.nn.Module):
         )
 
         unpooled_outputs = outputs['last_hidden_state'][:,1:,:]
-        combined_output = torch.concat([unpooled_outputs, glyph_embeddings], axis=-1)
+        print(unpooled_outputs.shape, comp_embeddings.shape)
+        combined_output = torch.cat([unpooled_outputs,comp_embeddings], axis=-1)
 
         #LSTM architecture
         X = pack_padded_sequence(combined_output, lens, batch_first=True, enforce_sorted=False)
@@ -109,7 +112,7 @@ class CustomUnpooledModel(torch.nn.Module):
         X = self.fc(X).squeeze()
         return X
 
-def train_loop(dataloader, model, optimizer, device):
+def train_loop(dataloader, model, optimizer, device, pooled=1):
     model.train()
     train_loss = 0; correct = 0;
     num_batches = len(dataloader)
@@ -120,8 +123,13 @@ def train_loop(dataloader, model, optimizer, device):
         attention_mask = batch['attention_mask'].to(device)
         labels = batch['labels'].to(device)
         component_ids = batch['subcomponent_ids'].to(device)
-        outputs = model(input_ids, attention_mask=attention_mask, labels=labels, 
-                        subcomponent_ids = component_ids)
+        if not pooled: 
+            lens_ = batch['seq_lengths']
+            outputs = model(input_ids, attention_mask=attention_mask, lens=lens_, 
+                            comp_embeddings = component_ids)
+        else:
+            outputs = model(input_ids, attention_mask=attention_mask, labels=labels, 
+                            subcomponent_ids = component_ids)
         loss = outputs.loss
         loss.backward()
 
@@ -138,7 +146,7 @@ def train_loop(dataloader, model, optimizer, device):
     print(f"Train Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {train_loss:>8f} \n")
     return train_loss, correct
 
-def test_loop(dataloader, model, lr_scheduler, device):
+def test_loop(dataloader, model, lr_scheduler, device, pooled=1):
     model.eval()
     test_loss = 0; correct = 0;
     num_batches = len(dataloader)
@@ -150,7 +158,14 @@ def test_loop(dataloader, model, lr_scheduler, device):
             attention_mask = batch['attention_mask'].to(device)
             labels = batch['labels'].to(device)
             component_ids = batch['subcomponent_ids'].to(device)
-            outputs = model(input_ids, attention_mask=attention_mask, labels=labels, subcomponent_ids = component_ids)
+            
+            if not pooled: 
+                lens_ = batch['seq_lengths']
+                outputs = model(input_ids, attention_mask=attention_mask, lens=lens_, 
+                               comp_embeddings = component_ids)
+            else:
+                outputs = model(input_ids, attention_mask=attention_mask, 
+                                labels=labels, subcomponent_ids = component_ids)
 
             test_loss += outputs.loss.item()
             # compute accuracy
