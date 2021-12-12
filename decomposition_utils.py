@@ -80,14 +80,14 @@ def text2charidx(text, char2id, pooled, tokenizer=None):
 
 # finding the corresponding subcomponents, mapping to idx from the trained data
 def text2subcomponent(text, subcomponent_list, comp2id, char2id, unk_idx, pooled, tokenizer=None, flatten=False):
-    if not pooled:
+    if pooled:
         char_idx_list = text2charidx(text, char2id, pooled, tokenizer=tokenizer) # UNK characters -> vocab size + 1
         subcomp = [subcomponent_list[idx] for idx in char_idx_list]
         output = []
         for x in subcomp:
             output.extend([comp2id[s] if s in comp2id else unk_idx for s in x])
     else:
-        char_idx_list = text2charidx(text, char2id, pooled)
+        char_idx_list = text2charidx(text, char2id, pooled, tokenizer=tokenizer)
         subcomp = [subcomponent_list[idx] for idx in char_idx_list]
         output = []
         for x in subcomp:
@@ -162,7 +162,7 @@ def parse_char2comp(char2comp_fpath):
   return char2id, subcomponent_list
 
 # mapping subcomponents to embeddings. The last dim of subcomponents is pooled 
-def subcomponent2emb(subcomponent_ids, padding=True, seq_length = 100):
+def subcomponent2emb(subcomponent_ids, SUBCOMPONENT_EMBEDDINGS_EXT, padding=True, seq_length = 100):
   subcomponent_embs = []
   for subcomponent_ids_i in subcomponent_ids:
     emb_list_i = []
@@ -178,17 +178,21 @@ def subcomponent2emb(subcomponent_ids, padding=True, seq_length = 100):
 # Define subcharacter info dataset class
 # based on: https://huggingface.co/transformers/custom_datasets.html
 class ComponentDataset(Dataset):
-    def __init__(self, encodings, labels, subcomponent_ids, seq_lengths):
+    def __init__(self, encodings, labels, subcomponent_ids, pooled=1, seq_lengths=None):
         self.encodings = encodings
         self.labels = labels
         self.subcomponent_ids = subcomponent_ids
-        self.seq_lengths = seq_lengths
+        if not pooled:
+            self.seq_lengths = seq_lengths
+        self.pooled = pooled
 
     def __getitem__(self, idx):
         item = {key: torch.tensor(val[idx]) for key, val in self.encodings.items()}
         item['labels'] = torch.tensor(self.labels[idx])
         item['subcomponent_ids'] = torch.tensor(self.subcomponent_ids[idx])
-        item['seq_lengths'] = torch.tensor(self.seq_lengths[idx])
+        if not self.pooled:
+            item['seq_lengths'] = torch.tensor(self.seq_lengths[idx])
+ 
         return item
 
     def __len__(self):

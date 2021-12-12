@@ -4,6 +4,7 @@ from torch.nn import CrossEntropyLoss, MSELoss, Embedding, LSTM, Linear, init
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, pad_sequence
 from transformers import BertModel
 from transformers.modeling_outputs import SequenceClassifierOutput
+from tqdm import tqdm
 
 # Related references:
 # https://stackoverflow.com/questions/64156202/add-dense-layer-on-top-of-huggingface-bert-model
@@ -58,8 +59,9 @@ class CustomPooledModel(nn.Module): #CustomPooledModel(nn.Module):
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
-        
-class CustomUnpooledModel(torch.nn.Module):
+
+# unpooled model
+class LSTMClassifier(torch.nn.Module):
     
     def __init__(self, lstm_input_size: int, hidden_size: int, output_size: int, padding_idx: int, bertconfig, dropout=0.5):
         super().__init__()
@@ -71,6 +73,7 @@ class CustomUnpooledModel(torch.nn.Module):
         self.rnn = nn.LSTM(self.lstm_input_size, self.hidden_size, 1, bidirectional=True)
         self.fc = Linear(4*self.hidden_size, self.output_size)
         self.dropout = nn.Dropout(dropout)
+        self.num_labels = output_size
 
     def forward(
         self,
@@ -101,15 +104,29 @@ class CustomUnpooledModel(torch.nn.Module):
         )
 
         unpooled_outputs = outputs['last_hidden_state'][:,1:,:]
-        print(unpooled_outputs.shape, comp_embeddings.shape)
         combined_output = torch.cat([unpooled_outputs,comp_embeddings], axis=-1)
 
         #LSTM architecture
-        X = pack_padded_sequence(combined_output, lens, batch_first=True, enforce_sorted=False)
+        X = pack_padded_sequence(combined_output, lens, batch_first=True, enforce_sorted=False).float()
         output, (hn, cn) = self.rnn(X)
         X = torch.cat([*hn, *cn], dim=-1).unsqueeze(dim=0)
         X = self.dropout(X)
         X = self.fc(X).squeeze()
+        
+        if labels is not None:
+            if self.num_labels == 1:
+                #  We are doing regression
+                loss_fct = MSELoss()
+                loss = loss_fct(X.view(-1), labels.view(-1))
+            else:
+                loss_fct = CrossEntropyLoss()
+                loss = loss_fct(X.view(-1, self.num_labels), labels.view(-1))
+                
+        return SequenceClassifierOutput(
+            loss=loss,
+            logits=X
+        )
+    
         return X
 
 def train_loop(dataloader, model, optimizer, device, pooled=1):
@@ -118,7 +135,7 @@ def train_loop(dataloader, model, optimizer, device, pooled=1):
     num_batches = len(dataloader)
     size = len(dataloader.dataset)
 
-    for batch in dataloader:
+    for batch in tqdm(dataloader):
         input_ids = batch['input_ids'].to(device)
         attention_mask = batch['attention_mask'].to(device)
         labels = batch['labels'].to(device)
@@ -126,7 +143,7 @@ def train_loop(dataloader, model, optimizer, device, pooled=1):
         if not pooled: 
             lens_ = batch['seq_lengths']
             outputs = model(input_ids, attention_mask=attention_mask, lens=lens_, 
-                            comp_embeddings = component_ids)
+                            labels=labels, comp_embeddings = component_ids)
         else:
             outputs = model(input_ids, attention_mask=attention_mask, labels=labels, 
                             subcomponent_ids = component_ids, device=device)
@@ -153,7 +170,7 @@ def test_loop(dataloader, model, lr_scheduler, device, pooled=1):
     size = len(dataloader.dataset)
 
     with torch.no_grad():
-        for batch in dataloader:
+        for batch in tqdm(dataloader):
             input_ids = batch['input_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
             labels = batch['labels'].to(device)
@@ -162,7 +179,7 @@ def test_loop(dataloader, model, lr_scheduler, device, pooled=1):
             if not pooled: 
                 lens_ = batch['seq_lengths']
                 outputs = model(input_ids, attention_mask=attention_mask, lens=lens_, 
-                               comp_embeddings = component_ids)
+                                labels=labels,comp_embeddings = component_ids)
             else:
                 outputs = model(input_ids, attention_mask=attention_mask, 
                                 labels=labels, subcomponent_ids = component_ids, device=device)
