@@ -14,7 +14,7 @@ import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss, MSELoss
 from transformers.models.bert.modeling_bert import BertEncoder, BertPooler, BertOnlyMLMHead, BertPreTrainedModel
-from transformers.modeling_bert import BertModel
+from transformers.models.bert.modeling_bert import BertModel
 from transformers.modeling_outputs import BaseModelOutputWithPooling, MaskedLMOutput, SequenceClassifierOutput, \
     QuestionAnsweringModelOutput, TokenClassifierOutput
 
