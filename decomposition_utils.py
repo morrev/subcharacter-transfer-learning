@@ -175,6 +175,16 @@ def subcomponent2emb(subcomponent_ids, SUBCOMPONENT_EMBEDDINGS_EXT, padding=True
     subcomponent_embs.append(emb_list_i)
   return np.array(subcomponent_embs)
 
+def get_glyph_embeddings(sentences, chinese_bert, chinese_bert_tokenizer):
+  encoded = chinese_bert_tokenizer.tokenizer.encode_batch(sentences, add_special_tokens=False)
+  g_embeddings = []
+  for e in encoded:
+    input_ids = torch.LongTensor(e.ids).view(1, -1)
+    g = chinese_bert.embeddings.glyph_embeddings(input_ids)
+    g = chinese_bert.embeddings.glyph_map(g).detach()
+    g_embeddings.append(g.mean(axis=1))
+  return torch.cat(g_embeddings)
+
 # Define subcharacter info dataset class
 # based on: https://huggingface.co/transformers/custom_datasets.html
 class ComponentDataset(Dataset):

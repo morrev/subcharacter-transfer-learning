@@ -68,3 +68,4 @@ if ! git clone "${CBERTurl}" "${CBERTfolder2}" 2>/dev/null && [ -d "${CBERTfolde
 fi
 
 cp data/modeling_glycebert.py "${CBERTfolder2}"/models/
+cp data/fusion_embedding.py "${CBERTfolder2}"/models/

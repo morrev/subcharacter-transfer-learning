@@ -18,8 +18,8 @@ from transformers.models.bert.modeling_bert import BertModel
 from transformers.modeling_outputs import BaseModelOutputWithPooling, MaskedLMOutput, SequenceClassifierOutput, \
     QuestionAnsweringModelOutput, TokenClassifierOutput
 
-from models.fusion_embedding import FusionBertEmbeddings
-from models.classifier import BertMLP
+from fusion_embedding import FusionBertEmbeddings
+from classifier import BertMLP
 
 class GlyceBertModel(BertModel):
     r"""

@@ -10,16 +10,22 @@ from tqdm import tqdm
 # https://stackoverflow.com/questions/64156202/add-dense-layer-on-top-of-huggingface-bert-model
 # https://github.com/huggingface/transformers/blob/v4.5.0/src/transformers/models/bert/modeling_bert.py#L1515
 class CustomPooledModel(nn.Module): #CustomPooledModel(nn.Module):
-    def __init__(self, bert, embeddings, num_labels, component_pad_idx):
+    def __init__(self, bert, embeddings, num_labels, component_pad_idx, subcomponent=1):
         super().__init__()
         self.num_labels = num_labels
         self.component_pad_idx = component_pad_idx
-        self.component_embedding_dim = embeddings.shape[1]
+        
         
         self.bert = bert
         self.dropout = nn.Dropout(0.1)
-        self.subcomponent_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(embeddings), 
-                                                                   padding_idx = -1)
+        if subcomponent != 2: 
+            self.component_embedding_dim = embeddings.shape[1]
+            self.subcomponent_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(embeddings), 
+                                                                       padding_idx = -1)
+        else: 
+            self.component_embedding_dim = 1728
+            self.subcomponent_embedding = embeddings
+            
         self.classifier = nn.Linear(bert.config.hidden_size + self.component_embedding_dim, self.num_labels)
         # dummy parameter to store device: 
         # https://stackoverflow.com/questions/58926054/how-to-get-the-device-type-of-a-pytorch-module-conveniently
@@ -31,6 +37,9 @@ class CustomPooledModel(nn.Module): #CustomPooledModel(nn.Module):
         outputs = self.bert(input_ids, attention_mask = attention_mask)
         pooled_output = outputs[1]
         pooled_output = self.dropout(pooled_output)
+        
+        if self.component_embedding_dim == 1728: 
+            subcomponent_ids = input_ids
         
         # obtain averaged subcomponent vector for non-pad entries
         subcomponent_lengths = torch.sum(subcomponent_ids != self.component_pad_idx, dim = -1)
@@ -129,7 +138,7 @@ class LSTMClassifier(torch.nn.Module):
     
         return X
 
-def train_loop(dataloader, model, optimizer, device, pooled=1):
+def train_loop(dataloader, model, optimizer, device, subcomponent=1,pooled=1):
     model.train()
     train_loss = 0; correct = 0;
     num_batches = len(dataloader)
@@ -140,11 +149,12 @@ def train_loop(dataloader, model, optimizer, device, pooled=1):
         attention_mask = batch['attention_mask'].to(device)
         labels = batch['labels'].to(device)
         component_ids = batch['subcomponent_ids'].to(device)
-        if not pooled: 
+        if not pooled: # unpooled
             lens_ = batch['seq_lengths']
             outputs = model(input_ids, attention_mask=attention_mask, lens=lens_, 
                             labels=labels, comp_embeddings = component_ids)
-        else:
+            
+        else: # pooled
             outputs = model(input_ids, attention_mask=attention_mask, labels=labels, 
                             subcomponent_ids = component_ids, device=device)
         loss = outputs.loss
@@ -176,11 +186,11 @@ def test_loop(dataloader, model, lr_scheduler, device, pooled=1):
             labels = batch['labels'].to(device)
             component_ids = batch['subcomponent_ids'].to(device)
             
-            if not pooled: 
+            if not pooled: # unpooled
                 lens_ = batch['seq_lengths']
                 outputs = model(input_ids, attention_mask=attention_mask, lens=lens_, 
                                 labels=labels,comp_embeddings = component_ids)
-            else:
+            else: # pooled
                 outputs = model(input_ids, attention_mask=attention_mask, 
                                 labels=labels, subcomponent_ids = component_ids, device=device)
 
