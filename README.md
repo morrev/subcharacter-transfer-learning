@@ -1,4 +1,9 @@
 # subcharacter-transfer-learning
+Required Python modules: 
+trLansformers 
+fugashi
+unidic-lite
+
 
 Data preparation:
 * Run `./prepare_data.sh` 
@@ -10,3 +15,6 @@ Data preparation:
     * JWSAN: word similarity pair scores
     * wikipedia title dataset: 12 label title classification dataset
   * by default, downloaded files saved to ./data directory
+
+
+Trained models will be saved to ./data/models

@@ -42,3 +42,11 @@ def load_wikipedia(colab = False):
     X_test = list(X_test)
 
     return X_train, X_val, X_test, y_train, y_val, y_test
+
+
+def write_pickle(path, d):
+    try:
+      with open(path,'wb') as f:
+          return pickle.dump(d, f, protocol = pickle.HIGHEST_PROTOCOL)
+    except:
+        print(f'Write pickle error on {f}')
