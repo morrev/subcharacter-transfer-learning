@@ -1,11 +1,8 @@
 # subcharacter-transfer-learning
-Required Python modules: 
-- trLansformers 
-- fugashi
-- unidic-lite
 
 ## Requirements
-```pip install -r requirements.txt```
+Dependencies are stored in the Pipenv and Pipenv.lock files, which can be installed via:
+```pipenv install``
 
 ## Data preparation
 * Run `./prepare_data.sh` 
