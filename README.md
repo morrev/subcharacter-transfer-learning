@@ -1,8 +1,14 @@
 # subcharacter-transfer-learning
 
+## Summary
+Models and training scripts for using pretrained Chinese subcharacter (glyph, radical, subcomponent) together with pretrained Japanese BERT, to assess performance improvement on Japanese NLP tasks (title classification on Livedoor and Wikipedia, and embedding similarity on JWSAN), relative to a pretrained Japanese BERT baseline.
+
+## Motivation
+Incorporating subcharacter embeddings has yielded improved performance in Chinese and Japanese NLP tasks separately, compared to only using character embeddings. Recent papers make use of the fact that the graphical subcharacters of Chinese characters contain both semantic and phonetic information. However, transferring subcharacter embeddings from Chinese to Japanese remains largely unexplored. We assess the effect of including Chinese subcharacter embeddings in Japanese pretrained models for Japanese NLP tasks. 
+
 ## Requirements
 Dependencies are stored in the Pipenv and Pipenv.lock files, which can be installed via:
-```pipenv install``
+`pipenv install`
 
 ## Data preparation
 * Run `./prepare_data.sh` 
