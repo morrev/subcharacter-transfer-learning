@@ -9,6 +9,7 @@ Dependencies are stored in the Pipenv and Pipenv.lock files, which can be instal
   * this git clones:
     * GDCE-SSA: repo for livedoor train/test split and processing
     * JWE: radical and subcomponent mappings
+    * ChineseBERT: glyph embeddings (pretrained model in `/ChineseBERT-large` and models in `/ChineseBert/` by default) 
   * this curls:
     * livedoor: 9 label title classification dataset
     * JWSAN: word similarity pair scores
