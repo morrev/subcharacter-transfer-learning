@@ -1,6 +1,7 @@
 from torch.utils.data import DataLoader, Dataset
 import torch
 import numpy as np
+import gc
 
 def build_dictionary(word_list):
     # from https://github.com/HKUST-KnowComp/JWE/blob/master/src/word_sim.py
@@ -14,7 +15,7 @@ def build_dictionary(word_list):
 def read_vectors(vec_file):
     # from https://github.com/HKUST-KnowComp/JWE/blob/master/src/word_sim.py
     # input:  the file of word2vectors
-    # output: word dictionary, embedding matrix -- np ndarray
+    # output: word dictionfary, embedding matrix -- np ndarray
     f = open(vec_file,'r')
     cnt = 0
     word_list = []
@@ -175,15 +176,46 @@ def subcomponent2emb(subcomponent_ids, SUBCOMPONENT_EMBEDDINGS_EXT, padding=True
     subcomponent_embs.append(emb_list_i)
   return np.array(subcomponent_embs)
 
-def get_glyph_embeddings(sentences, chinese_bert, chinese_bert_tokenizer):
-  encoded = chinese_bert_tokenizer.tokenizer.encode_batch(sentences, add_special_tokens=False)
-  g_embeddings = []
-  for e in encoded:
-    input_ids = torch.LongTensor(e.ids).view(1, -1)
-    g = chinese_bert.embeddings.glyph_embeddings(input_ids)
-    g = chinese_bert.embeddings.glyph_map(g).detach()
-    g_embeddings.append(g.mean(axis=1))
-  return torch.cat(g_embeddings)
+def get_glyph_embeddings(sentences, chinese_bert, chinese_bert_tokenizer, pooled=1, jbert_tokenizer=None):
+    
+    if pooled:
+        encoded = chinese_bert_tokenizer.tokenizer.encode_batch(sentences, add_special_tokens=False)
+        g_embeddings = []
+        for e in encoded:
+            input_ids = torch.LongTensor(e.ids).view(1, -1)
+            g = chinese_bert.embeddings.glyph_embeddings(input_ids)
+            g = chinese_bert.embeddings.glyph_map(g).detach()
+            g_embeddings.append(g.mean(axis=1))
+        g_embeddings = torch.cat(g_embeddings)
+    else: 
+        tokens = jbert_tokenizer.tokenize(sentences)
+        encoded = chinese_bert_tokenizer.tokenizer.encode_batch(tokens, add_special_tokens=False)
+        g_embeddings = []
+        for e in encoded:
+            input_ids = torch.LongTensor([e.ids[0]]).view(1, -1)
+            g = chinese_bert.embeddings.glyph_embeddings(input_ids)
+            g = chinese_bert.embeddings.glyph_map(g).detach()
+            g_embeddings.append(g)
+        g_embeddings = torch.cat(g_embeddings).squeeze(dim=1)
+    return g_embeddings
+
+def text2glyph(X, chinese_bert, chinese_bert_tokenizer, jbert_tokenizer, padding=True, seq_length = 100):
+  embs = []
+  lens = []
+  for sentence in X:
+    emb_i = get_glyph_embeddings(sentence, chinese_bert, chinese_bert_tokenizer, pooled=0, jbert_tokenizer=jbert_tokenizer)
+    embs.append(emb_i)
+    lens.append(len(emb_i))
+
+  max_len = max(lens)
+  embs_padded = []
+  for embs_i in embs:
+    embs_padded.append(np.pad(embs_i, ((0, max_len-embs_i.shape[0]+1), (0, 0)), 'constant', constant_values=0))
+  
+  del(embs)
+  gc.collect()
+
+  return lens, np.array(embs_padded)
 
 # Define subcharacter info dataset class
 # based on: https://huggingface.co/transformers/custom_datasets.html
