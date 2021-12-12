@@ -1,5 +1,12 @@
 from transformers import AutoTokenizer
+# from datasets.bert_dataset import BertDataset
+# from models.modeling_glycebert import GlyceBertModel
+from transformers.models.bert.modeling_bert import BertModel
+
+CHINESEBERT_PATH = "~/ChineseBERT-large"
 tokenizer = AutoTokenizer.from_pretrained("cl-tohoku/bert-base-japanese-char-v2")
+# chinese_bert_tokenizer = BertDataset(CHINESEBERT_PATH)
+# chinese_bert = GlyceBertModel.from_pretrained(CHINESEBERT_PATH)
 
 def get_glyph_embeddings(sentence, pooled):
   if not pooled:

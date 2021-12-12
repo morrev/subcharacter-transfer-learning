@@ -162,7 +162,15 @@ def parse_char2comp(char2comp_fpath):
   return char2id, subcomponent_list
 
 # mapping subcomponents to embeddings. The last dim of subcomponents is pooled 
-def subcomponent2emb(subcomponent_ids, padding=True, seq_length = 100):
+def subcomponent2emb(subcomponent_ids, padding=True, seq_length = 100, m = "subcomponent"):
+  vec_dir = f'data/JWE-pretrained/{m}_comp_vec'
+  comp_size, SUBCOMPONENT_EMBEDDING_SIZE, comp2id, SUBCOMPONENT_EMBEDDINGS = read_vectors(vec_dir)
+  SUBCOMPONENT_EMBEDDINGS = np.vstack((SUBCOMPONENT_EMBEDDINGS, np.zeros((1, np.shape(SUBCOMPONENT_EMBEDDINGS)[1]))))
+  SUBCOMPONENT_EMBEDDING_SIZE = int(SUBCOMPONENT_EMBEDDING_SIZE)
+
+  SUB_EMBS_SIZE = SUBCOMPONENT_EMBEDDINGS.shape[-1]
+  unk_sub_emb = np.full(SUB_EMBS_SIZE, 0).reshape(1,-1)
+  SUBCOMPONENT_EMBEDDINGS_EXT = np.concatenate([SUBCOMPONENT_EMBEDDINGS, unk_sub_emb], axis=0)
   subcomponent_embs = []
   for subcomponent_ids_i in subcomponent_ids:
     emb_list_i = []
