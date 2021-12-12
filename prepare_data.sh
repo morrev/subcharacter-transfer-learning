@@ -53,3 +53,18 @@ else
 fi
 
 cd ../../
+
+
+CBERTfolder="data/CBERT-large"
+CBERTurl="https://huggingface.co/ShannonAI/ChineseBERT-large"
+if ! git clone "${CBERTurl}" "${CBERTfolder}" 2>/dev/null && [ -d "${CBERTfolder}" ] ; then
+    echo "Clone ignored because the folder ${CBERTfolder} exists"
+fi
+
+CBERTfolder2="data/CBERT"
+CBERTurl="https://github.com/ShannonAI/ChineseBert.git"
+if ! git clone "${CBERTurl}" "${CBERTfolder2}" 2>/dev/null && [ -d "${CBERTfolder2}" ] ; then
+    echo "Clone ignored because the folder ${CBERTfolder2} exists"
+fi
+
+cp data/modeling_glycebert.py data/CBERT/models/
