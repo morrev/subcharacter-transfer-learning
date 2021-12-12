@@ -133,7 +133,7 @@ def parse_comp2vec(comp2vec_filepath):
 
 # preprocess list of text by convrting to list of lists of component_ids
 def decompose(X_list, subcomponent_list, comp2id, char2id, unk_idx, pad_idx, pad_length = None):
-    component_ids = [text2subcomponent(i, subcomponent_list, comp2id, char2id, unk_idx) for i in X_list]
+    component_ids = [text2subcomponent(i, subcomponent_list, comp2id, char2id, unk_idx, 1) for i in X_list]
     component_ids = remove_unks(component_ids, unk_idx)
     max_decomposition_length = np.max(np.array([len(i) for i in component_ids]))
     print(f"Maximum decomposition length: {max_decomposition_length}")

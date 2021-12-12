@@ -22,10 +22,10 @@ class CustomPooledModel(nn.Module): #CustomPooledModel(nn.Module):
         self.classifier = nn.Linear(bert.config.hidden_size + self.component_embedding_dim, self.num_labels)
         # dummy parameter to store device: 
         # https://stackoverflow.com/questions/58926054/how-to-get-the-device-type-of-a-pytorch-module-conveniently
-        self.dummy_param = nn.Parameter(torch.empty(0)) 
+#         self.dummy_param = nn.Parameter(torch.empty(0)) 
         
-    def forward(self, input_ids=None, attention_mask=None, labels=None, subcomponent_ids=None):
-        device = self.dummy_param.device
+    def forward(self, input_ids=None, attention_mask=None, labels=None, subcomponent_ids=None, device='cpu'):
+#         device = self.dummy_param.device
         # get pooled output from bert base model
         outputs = self.bert(input_ids, attention_mask = attention_mask)
         pooled_output = outputs[1]
@@ -129,7 +129,7 @@ def train_loop(dataloader, model, optimizer, device, pooled=1):
                             comp_embeddings = component_ids)
         else:
             outputs = model(input_ids, attention_mask=attention_mask, labels=labels, 
-                            subcomponent_ids = component_ids)
+                            subcomponent_ids = component_ids, device=device)
         loss = outputs.loss
         loss.backward()
 
@@ -165,7 +165,7 @@ def test_loop(dataloader, model, lr_scheduler, device, pooled=1):
                                comp_embeddings = component_ids)
             else:
                 outputs = model(input_ids, attention_mask=attention_mask, 
-                                labels=labels, subcomponent_ids = component_ids)
+                                labels=labels, subcomponent_ids = component_ids, device=device)
 
             test_loss += outputs.loss.item()
             # compute accuracy
