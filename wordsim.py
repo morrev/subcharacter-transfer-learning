@@ -9,6 +9,10 @@ from transformers import BertConfig, AutoTokenizer, AutoModelForSequenceClassifi
 from torch.utils.data import DataLoader, Dataset
 from decomposition_utils import *
 from glyph_utils import *
+import math
+import random
+
+device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model",
@@ -64,12 +68,81 @@ class WordSimDataset(Dataset):
 
     def __getitem__(self, idx):
         item = {key: torch.tensor(val[idx]) for key, val in self.encodings.items()}
-        item['additional_embeddings'] = torch.tensor(self.additional_embeddings[idx]).float() if self.additional_embeddings else None
-        item['seq_lengths'] = torch.tensor(self.seq_lengths[idx]) if self.seq_lengths else None
+        if self.additional_embeddings:
+            item['additional_embeddings'] = torch.tensor(self.additional_embeddings[idx]).float()
+        if self.seq_lengths:
+            item['seq_lengths'] = torch.tensor(self.seq_lengths[idx])
         return item
 
     def __len__(self):
         return len(self.encodings['input_ids'])
+
+# activation needs to be here
+activation = {}
+def getActivation(name):
+  # the hook signature
+  def hook(model, input, output):
+    activation[name] = output.detach()
+  return hook
+
+def last_hidden_output(batch, model):
+  model.eval()
+  with torch.no_grad():
+      # Get inputs
+      input_ids = batch['input_ids'].to(device)
+      attention_mask = batch['attention_mask'].to(device)
+      glyph_embeddings = batch['glyph_embeddings'].to(device)
+      seq_lengths = batch['seq_lengths']
+
+      # Get last output of BiLSTM (size 800)
+      outputs = model.bert(input_ids, attention_mask=attention_mask)
+      unpooled_outputs = outputs['last_hidden_state'][:,1:,:]
+      combined_output = torch.concat([unpooled_outputs, glyph_embeddings], axis=-1)
+      X = pack_padded_sequence(combined_output, seq_lengths, batch_first=True, enforce_sorted=False)
+      output, (hn, cn) = model.rnn(X)
+      X = torch.cat([*hn, *cn], dim=-1).unsqueeze(dim=0)
+  return X
+
+def intermediate_output(batch, model, pooled):
+    if pooled:
+        with torch.no_grad():
+            input_ids = batch['input_ids'].to(device)
+            attention_mask = batch['attention_mask'].to(device)
+            if 'additional_embeddings' in batch.keys():
+                glyph_embeddings = batch['additional_embeddings'].to(device)
+            if 'seq_lengths' in batch.keys():
+                seq_lengths = batch['seq_lengths'].to(device)
+            if 'additional_embeddings' in batch.keys():
+                if 'seq_lengths' in batch.keys():
+                    model(input_ids, 
+                          attention_mask = attention_mask, 
+                          glyph_embeddings = glyph_embeddings, 
+                          lens = seq_lengths)
+                else: 
+                    model(input_ids, 
+                          attention_mask = attention_mask, 
+                          glyph_embeddings = glyph_embeddings)
+            else:
+                model(input_ids, attention_mask = attention_mask)
+            _pooled_output = activation['pooler']
+            combined_output =_pooled_output
+            return combined_output
+    with torch.no_grad():
+        # Get inputs
+        input_ids = batch['input_ids'].to(device)
+        attention_mask = batch['attention_mask'].to(device)
+        glyph_embeddings = batch['glyph_embeddings'].to(device)
+        seq_lengths = batch['seq_lengths']
+    
+        # Get last output of BiLSTM (size 800)
+        outputs = model.bert(input_ids, attention_mask=attention_mask)
+        unpooled_outputs = outputs['last_hidden_state'][:,1:,:]
+        combined_output = torch.concat([unpooled_outputs, glyph_embeddings], axis=-1)
+        X = pack_padded_sequence(combined_output, seq_lengths, batch_first=True, enforce_sorted=False)
+        output, (hn, cn) = model.rnn(X)
+        X = torch.cat([*hn, *cn], dim=-1).unsqueeze(dim=0)
+        return X
+
 
 # load model
 h1, h2 = None, None
@@ -88,7 +161,8 @@ if args.model == "glyph":
         dataset_w2 = WordSimDataset(encodings_w2, glyph_embeddings_w2)
         GLYPH_EMBEDDING_SIZE = 1728
         model = CustomPooledModel.from_pretrained("cl-tohoku/bert-base-japanese-char-v2", num_labels = 9).to(device)
-        model.load_state_dict(torch.load(f"models/bert-base-japanese-{args.dataset}-JWE-glyph/pytorch_model.bin"))
+        model.load_state_dict(torch.load(f"models/bert-base-japanese-{args.dataset}-JWE-glyph/pytorch_model.bin", 
+                                         map_location=device))
         h1 = model.glyph_embeddings.register_forward_hook(getActivation('glyph_embeddings'))
         h2 = model.bert.pooler.register_forward_hook(getActivation('pooler'))
 elif args.model == "radical" or args.model == "subcomponent":
@@ -120,10 +194,12 @@ elif args.model == "radical" or args.model == "subcomponent":
         model = CustomPooledModel.from_pretrained("cl-tohoku/bert-base-japanese-char-v2", num_labels = 9).to(device)
         if model.frozen == "True":
             config = BertConfig.from_json_file(f"models/bert-base-japanese-{args.dataset}-JWE-{args.model}-frozen/config.json")
-            model.load_state_dict(torch.load(f"models/bert-base-japanese-{args.dataset}-JWE-{args.model}-frozen/pytorch_model.bin"))
+            model.load_state_dict(torch.load(f"models/bert-base-japanese-{args.dataset}-JWE-{args.model}-frozen/pytorch_model.bin", 
+                                             map_location = device))
         else:
             config = BertConfig.from_json_file(f"models/bert-base-japanese-{args.dataset}-JWE-{args.model}/config.json")
-            model.load_state_dict(torch.load(f"models/bert-base-japanese-{args.dataset}-JWE-{args.model}/pytorch_model.bin"))  
+            model.load_state_dict(torch.load(f"models/bert-base-japanese-{args.dataset}-JWE-{args.model}/pytorch_model.bin", 
+                                             map_location = device))  
         h1 = model.subcomponent_embedding.register_forward_hook(getActivation('subcomponent_embedding'))
         h2 = model.bert.pooler.register_forward_hook(getActivation('pooler'))
 else:
@@ -131,7 +207,8 @@ else:
     dataset_w2 = WordSimDataset(encodings_w2)
     config = BertConfig.from_json_file(f"models/bert-base-japanese-{args.dataset}-titles/config.json")
     model = AutoModelForSequenceClassification.from_pretrained("cl-tohoku/bert-base-japanese-char-v2", num_labels = 9).to(device)
-    model.load_state_dict(torch.load(f"models/bert-base-japanese-{args.dataset}-titles/pytorch_model.bin"))
+    model.load_state_dict(torch.load(f"models/bert-base-japanese-{args.dataset}-titles/pytorch_model.bin",
+                                     map_location = device))
     h2 = model.bert.pooler.register_forward_hook(getActivation('pooler'))
 loader_1 = DataLoader(dataset_w1, batch_size = BATCH_SIZE, shuffle=True)
 loader_2 = DataLoader(dataset_w2, batch_size = BATCH_SIZE, shuffle=True)
