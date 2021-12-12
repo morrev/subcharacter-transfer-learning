@@ -36,3 +36,18 @@ livedoor = 1 # if 1, load livedoor data; if 0, load wikipedia data
 ````
 
 Trained models will be saved to ./data/models
+
+Currently, `train.ipynb` contains a small example run. For training the full dataset, comment out the following lines: 
+```
+iend = 20
+X_train = X_train[:iend]
+X_val = X_val[:iend]
+X_test = X_test[:iend]
+y_train = y_train[:iend]
+y_val = y_val[:iend]
+y_test = y_test[:iend]
+```
+
+### Data
+Our trained model can be found on Google Drive: https://drive.google.com/drive/folders/1M6CpAuvvZqvgUBcIKwmZvESLj1b7aGCT?usp=sharing
+
