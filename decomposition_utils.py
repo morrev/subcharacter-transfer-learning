@@ -1,6 +1,7 @@
 from torch.utils.data import DataLoader, Dataset
 import torch
 import numpy as np
+import gc
 
 def build_dictionary(word_list):
     # from https://github.com/HKUST-KnowComp/JWE/blob/master/src/word_sim.py
@@ -14,7 +15,7 @@ def build_dictionary(word_list):
 def read_vectors(vec_file):
     # from https://github.com/HKUST-KnowComp/JWE/blob/master/src/word_sim.py
     # input:  the file of word2vectors
-    # output: word dictionary, embedding matrix -- np ndarray
+    # output: word dictionfary, embedding matrix -- np ndarray
     f = open(vec_file,'r')
     cnt = 0
     word_list = []
@@ -80,14 +81,14 @@ def text2charidx(text, char2id, pooled, tokenizer=None):
 
 # finding the corresponding subcomponents, mapping to idx from the trained data
 def text2subcomponent(text, subcomponent_list, comp2id, char2id, unk_idx, pooled, tokenizer=None, flatten=False):
-    if not pooled:
+    if pooled:
         char_idx_list = text2charidx(text, char2id, pooled, tokenizer=tokenizer) # UNK characters -> vocab size + 1
         subcomp = [subcomponent_list[idx] for idx in char_idx_list]
         output = []
         for x in subcomp:
             output.extend([comp2id[s] if s in comp2id else unk_idx for s in x])
     else:
-        char_idx_list = text2charidx(text, char2id, pooled)
+        char_idx_list = text2charidx(text, char2id, pooled, tokenizer=tokenizer)
         subcomp = [subcomponent_list[idx] for idx in char_idx_list]
         output = []
         for x in subcomp:
@@ -183,20 +184,65 @@ def subcomponent2emb(subcomponent_ids, padding=True, seq_length = 100, m = "subc
     subcomponent_embs.append(emb_list_i)
   return np.array(subcomponent_embs)
 
+def get_glyph_embeddings(sentences, chinese_bert, chinese_bert_tokenizer, pooled=1, jbert_tokenizer=None):
+    
+    if pooled:
+        encoded = chinese_bert_tokenizer.tokenizer.encode_batch(sentences, add_special_tokens=False)
+        g_embeddings = []
+        for e in encoded:
+            input_ids = torch.LongTensor(e.ids).view(1, -1)
+            g = chinese_bert.embeddings.glyph_embeddings(input_ids)
+            g = chinese_bert.embeddings.glyph_map(g).detach()
+            g_embeddings.append(g.mean(axis=1))
+        g_embeddings = torch.cat(g_embeddings)
+    else: 
+        tokens = jbert_tokenizer.tokenize(sentences)
+        encoded = chinese_bert_tokenizer.tokenizer.encode_batch(tokens, add_special_tokens=False)
+        g_embeddings = []
+        for e in encoded:
+            input_ids = torch.LongTensor([e.ids[0]]).view(1, -1)
+            g = chinese_bert.embeddings.glyph_embeddings(input_ids)
+            g = chinese_bert.embeddings.glyph_map(g).detach()
+            g_embeddings.append(g)
+        g_embeddings = torch.cat(g_embeddings).squeeze(dim=1)
+    return g_embeddings
+
+def text2glyph(X, chinese_bert, chinese_bert_tokenizer, jbert_tokenizer, padding=True, seq_length = 100):
+  embs = []
+  lens = []
+  for sentence in X:
+    emb_i = get_glyph_embeddings(sentence, chinese_bert, chinese_bert_tokenizer, pooled=0, jbert_tokenizer=jbert_tokenizer)
+    embs.append(emb_i)
+    lens.append(len(emb_i))
+
+  max_len = max(lens)
+  embs_padded = []
+  for embs_i in embs:
+    embs_padded.append(np.pad(embs_i, ((0, max_len-embs_i.shape[0]+1), (0, 0)), 'constant', constant_values=0))
+  
+  del(embs)
+  gc.collect()
+
+  return lens, np.array(embs_padded)
+
 # Define subcharacter info dataset class
 # based on: https://huggingface.co/transformers/custom_datasets.html
 class ComponentDataset(Dataset):
-    def __init__(self, encodings, labels, subcomponent_ids, seq_lengths):
+    def __init__(self, encodings, labels, subcomponent_ids, pooled=1, seq_lengths=None):
         self.encodings = encodings
         self.labels = labels
         self.subcomponent_ids = subcomponent_ids
-        self.seq_lengths = seq_lengths
+        if not pooled:
+            self.seq_lengths = seq_lengths
+        self.pooled = pooled
 
     def __getitem__(self, idx):
         item = {key: torch.tensor(val[idx]) for key, val in self.encodings.items()}
         item['labels'] = torch.tensor(self.labels[idx])
         item['subcomponent_ids'] = torch.tensor(self.subcomponent_ids[idx])
-        item['seq_lengths'] = torch.tensor(self.seq_lengths[idx])
+        if not self.pooled:
+            item['seq_lengths'] = torch.tensor(self.seq_lengths[idx])
+ 
         return item
 
     def __len__(self):

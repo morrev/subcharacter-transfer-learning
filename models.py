@@ -4,21 +4,28 @@ from torch.nn import CrossEntropyLoss, MSELoss, Embedding, LSTM, Linear, init
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, pad_sequence
 from transformers import BertModel
 from transformers.modeling_outputs import SequenceClassifierOutput
+from tqdm import tqdm
 
 # Related references:
 # https://stackoverflow.com/questions/64156202/add-dense-layer-on-top-of-huggingface-bert-model
 # https://github.com/huggingface/transformers/blob/v4.5.0/src/transformers/models/bert/modeling_bert.py#L1515
 class CustomPooledModel(nn.Module): #CustomPooledModel(nn.Module):
-    def __init__(self, bert, embeddings, num_labels, component_pad_idx):
+    def __init__(self, bert, embeddings, num_labels, component_pad_idx, subcomponent=1):
         super().__init__()
         self.num_labels = num_labels
         self.component_pad_idx = component_pad_idx
-        self.component_embedding_dim = embeddings.shape[1]
+        
         
         self.bert = bert
         self.dropout = nn.Dropout(0.1)
-        self.subcomponent_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(embeddings), 
-                                                                   padding_idx = -1)
+        if subcomponent != 2: 
+            self.component_embedding_dim = embeddings.shape[1]
+            self.subcomponent_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(embeddings), 
+                                                                       padding_idx = -1)
+        else: 
+            self.component_embedding_dim = 1728
+            self.subcomponent_embedding = embeddings
+            
         self.classifier = nn.Linear(bert.config.hidden_size + self.component_embedding_dim, self.num_labels)
         # dummy parameter to store device: 
         # https://stackoverflow.com/questions/58926054/how-to-get-the-device-type-of-a-pytorch-module-conveniently
@@ -30,6 +37,9 @@ class CustomPooledModel(nn.Module): #CustomPooledModel(nn.Module):
         outputs = self.bert(input_ids, attention_mask = attention_mask)
         pooled_output = outputs[1]
         pooled_output = self.dropout(pooled_output)
+        
+        if self.component_embedding_dim == 1728: 
+            subcomponent_ids = input_ids
         
         # obtain averaged subcomponent vector for non-pad entries
         subcomponent_lengths = torch.sum(subcomponent_ids != self.component_pad_idx, dim = -1)
@@ -58,8 +68,9 @@ class CustomPooledModel(nn.Module): #CustomPooledModel(nn.Module):
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
-        
-class CustomUnpooledModel(torch.nn.Module):
+
+# unpooled model
+class LSTMClassifier(torch.nn.Module):
     
     def __init__(self, lstm_input_size: int, hidden_size: int, output_size: int, padding_idx: int, bertconfig, dropout=0.5):
         super().__init__()
@@ -71,6 +82,7 @@ class CustomUnpooledModel(torch.nn.Module):
         self.rnn = nn.LSTM(self.lstm_input_size, self.hidden_size, 1, bidirectional=True)
         self.fc = Linear(4*self.hidden_size, self.output_size)
         self.dropout = nn.Dropout(dropout)
+        self.num_labels = output_size
 
     def forward(
         self,
@@ -101,33 +113,48 @@ class CustomUnpooledModel(torch.nn.Module):
         )
 
         unpooled_outputs = outputs['last_hidden_state'][:,1:,:]
-        print(unpooled_outputs.shape, comp_embeddings.shape)
         combined_output = torch.cat([unpooled_outputs,comp_embeddings], axis=-1)
 
         #LSTM architecture
-        X = pack_padded_sequence(combined_output, lens, batch_first=True, enforce_sorted=False)
+        X = pack_padded_sequence(combined_output, lens, batch_first=True, enforce_sorted=False).float()
         output, (hn, cn) = self.rnn(X)
         X = torch.cat([*hn, *cn], dim=-1).unsqueeze(dim=0)
         X = self.dropout(X)
         X = self.fc(X).squeeze()
+        
+        if labels is not None:
+            if self.num_labels == 1:
+                #  We are doing regression
+                loss_fct = MSELoss()
+                loss = loss_fct(X.view(-1), labels.view(-1))
+            else:
+                loss_fct = CrossEntropyLoss()
+                loss = loss_fct(X.view(-1, self.num_labels), labels.view(-1))
+                
+        return SequenceClassifierOutput(
+            loss=loss,
+            logits=X
+        )
+    
         return X
 
-def train_loop(dataloader, model, optimizer, device, pooled=1):
+def train_loop(dataloader, model, optimizer, device, subcomponent=1,pooled=1):
     model.train()
     train_loss = 0; correct = 0;
     num_batches = len(dataloader)
     size = len(dataloader.dataset)
 
-    for batch in dataloader:
+    for batch in tqdm(dataloader):
         input_ids = batch['input_ids'].to(device)
         attention_mask = batch['attention_mask'].to(device)
         labels = batch['labels'].to(device)
         component_ids = batch['subcomponent_ids'].to(device)
-        if not pooled: 
+        if not pooled: # unpooled
             lens_ = batch['seq_lengths']
             outputs = model(input_ids, attention_mask=attention_mask, lens=lens_, 
-                            comp_embeddings = component_ids)
-        else:
+                            labels=labels, comp_embeddings = component_ids)
+            
+        else: # pooled
             outputs = model(input_ids, attention_mask=attention_mask, labels=labels, 
                             subcomponent_ids = component_ids, device=device)
         loss = outputs.loss
@@ -153,17 +180,17 @@ def test_loop(dataloader, model, lr_scheduler, device, pooled=1):
     size = len(dataloader.dataset)
 
     with torch.no_grad():
-        for batch in dataloader:
+        for batch in tqdm(dataloader):
             input_ids = batch['input_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
             labels = batch['labels'].to(device)
             component_ids = batch['subcomponent_ids'].to(device)
             
-            if not pooled: 
+            if not pooled: # unpooled
                 lens_ = batch['seq_lengths']
                 outputs = model(input_ids, attention_mask=attention_mask, lens=lens_, 
-                               comp_embeddings = component_ids)
-            else:
+                                labels=labels,comp_embeddings = component_ids)
+            else: # pooled
                 outputs = model(input_ids, attention_mask=attention_mask, 
                                 labels=labels, subcomponent_ids = component_ids, device=device)
 
