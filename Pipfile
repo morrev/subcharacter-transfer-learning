@@ -12,6 +12,7 @@ jupyter = "*"
 scikit-learn = "*"
 numpy = "*"
 pandas = "*"
+pypinyin = "*"
 
 [dev-packages]
 
