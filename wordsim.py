@@ -8,6 +8,7 @@ from wordsim_utils import *
 from transformers import BertConfig, AutoTokenizer, AutoModelForSequenceClassification, AdamW
 from torch.utils.data import DataLoader, Dataset
 from decomposition_utils import *
+from glyph_utils import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model",
@@ -81,8 +82,8 @@ if args.model == "glyph":
         with open(f"models/unpooled_jbert_cbert_glyph_{args.dataset}.pk", "rb") as f:
             model = pickle.load(f).to(device)
     else:
-        glyph_embeddings_w1 = get_glyph_embeddings(w1s)
-        glyph_embeddings_w2 = get_glyph_embeddings(w2s)
+        glyph_embeddings_w1 = get_glyph_embeddings(w1s, True)
+        glyph_embeddings_w2 = get_glyph_embeddings(w2s, True)
         dataset_w1 = WordSimDataset(encodings_w1, glyph_embeddings_w1)
         dataset_w2 = WordSimDataset(encodings_w2, glyph_embeddings_w2)
         GLYPH_EMBEDDING_SIZE = 1728
